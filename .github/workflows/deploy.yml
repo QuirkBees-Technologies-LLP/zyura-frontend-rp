@@ -1,0 +1,76 @@
+# name: Deploy Frontend to AWS EC2
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+
+#       - name: Deploy to EC2 via SSH
+#         uses: appleboy/ssh-action@v0.1.10
+#         with:
+#           host: ${{ secrets.EC2_FRONTEND_HOST }}
+#           username: ubuntu
+#           key: ${{ secrets.EC2_FRONTEND_SSH_KEY }}
+#           command_timeout: 30m
+#           script: |
+#             export NVM_DIR="$HOME/.nvm"
+#             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+#             cd ~/zyura-frontend
+#             git fetch origin
+#             git reset --hard origin/main
+#             npm install
+#             npm run build
+#             sudo systemctl reload nginx
+
+
+
+name: Deploy Frontend to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install & Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy dist to server
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_FRONTEND_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_FRONTEND_SSH_KEY }}
+          source: "dist/"
+          target: "~/zyura-frontend/"
+
+      - name: Reload Nginx
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_FRONTEND_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_FRONTEND_SSH_KEY }}
+          command_timeout: 2m
+          script: sudo systemctl reload nginx
